@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!-- saved from url=(0052)https://rawgit.com/harelg68/testrip/master/Stock.htm -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style type="text/css">@charset "UTF-8";[ng\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style><title> VRNS Stock Quote TFS Widget</title>
+<style>
+
+.container {
+	font-family: arial, san-serif;
+	font-weight: 400;
+}
+
+.up {	color: #0f9d58 }
+.down {	color: #d23f31; }
+
+</style>
+
+<script src="./VRNS Stock Quote TFS Widget_files/angular.min.js.download"></script>
+<script type="text/javascript">
+	"use strict";
+	
+	//-----------------------------------------------------------------------------------------------
+	// - Constants.
+	var symbolVerb = "__SYMBOL__";
+	var startTime  = new Date().getTime();	
+	var realTimeQuoteURL = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=__SYMBOL__&interval=1min&apikey=6DI5MIU7KZUSWM35";
+	var dailyQuoteURL = "https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=__SYMBOL__&apikey=6DI5MIU7KZUSWM35";
+	
+	// - Util functions.
+	function Time(){ return Math.floor((new Date().getTime() - startTime) / 1000); }
+	function Log(text){ console.log( "[" + Time() + "]: " + text); };
+	
+	//-----------------------------------------------------------------------------------------------
+	function httpGet(url) {
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			
+			xhr.onload = function() {
+				if (this.status === 200) 
+					resolve(this.response);	// Success
+				else 
+					reject(new Error(this.statusText)); // Something went wrong (404 etc.)
+			};
+			
+			xhr.onerror = function() { 
+				reject( new Error('XMLHttpRequest Error: '+this.statusText )); 
+			};
+			
+			xhr.open('GET', url);
+			xhr.send();
+		});
+	} // httpGet
+	
+</script>
+</head>
+<body>
+
+<div ng-app="myApp" ng-controller="myCtrl" class="ng-scope">
+	<div class="container">
+		<span style="font-size:16px; color:rgba(0,0,0,.62);line-height:1.7;">NASDAQ: VRNS</span><br>
+		<span style="font-size:27px; color:rgba(0,0,0,.87);" id="quote" class="ng-binding">XX.XX</span>
+		<span style="font-size:16px; color:rgba(0,0,0,.62);">USD</span><br>
+		<span style="font-size:16px; " class="up ng-binding" id="change">+XX.XX (XX%)</span><br>
+		<span style="font-size:12px; color:rgba(0,0,0,.62);line-height:2.2;" id="date" class="ng-binding">2000-01-01 00:00:00</span>
+	</div><br><br>
+</div>
+
+<script>
+	var app = angular.module('myApp', []);
+	app.controller('myCtrl', function($scope) {
+		$scope.quote = "XX.XX";
+		$scope.change = "+XX.XX (XX%)";
+		$scope.date = "2000-01-01 00:00:00";
+
+		//-----------------------------------------------------------------------------------------------
+		$scope.getSymbolQuote = function(symbol)	{
+			
+			var realTimeQuoteURL = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=__SYMBOL__&interval=1min&apikey=6DI5MIU7KZUSWM35".replace(symbolVerb,symbol);
+			var dailyQuoteURL = "https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=__SYMBOL__&apikey=6DI5MIU7KZUSWM35".replace(symbolVerb,symbol);
+		
+			var realTimeQuote, dailyQuote;
+			httpGet(realTimeQuoteURL)
+				.then( response => { realTimeQuote = JSON.parse(response); return httpGet(dailyQuoteURL)})
+				.then( response => { dailyQuote = JSON.parse(response); $scope.updateUI(realTimeQuote, dailyQuote)})
+				.catch( error => Log('Something went wrong', error));
+		} // getSymbolQuote
+	
+		//-----------------------------------------------------------------------------------------------
+		$scope.parseQuote = function(realTimeQuote,dailyQuote) {
+			
+			var obj = realTimeQuote["Time Series (1min)"];
+			var key = Object.keys(obj)[0];
+			var quote = obj[key];
+			
+			var curentValue = quote["4. close"];
+			var currentDate = key;
+			
+			obj = dailyQuote["Time Series (Daily)"]
+			key = Object.keys(obj)[1];
+			quote = obj[key];
+			
+			var openValue = quote["4. close"];
+			
+			return { currentValue: curentValue,
+							 openValue: openValue,
+							 sampleDate: currentDate		 
+			}
+		} // parseQuote
+		
+		//-----------------------------------------------------------------------------------------------
+		$scope.updateUI = function(realTimeQuote,dailyQuote) {
+			
+			var qoute = $scope.parseQuote(realTimeQuote,dailyQuote);
+			
+			var openValue = parseFloat(qoute.openValue);
+			var currentValue = parseFloat(qoute.currentValue);
+			
+			var up = currentValue >= openValue;
+			
+			var change = (up ? "+" : "") + (currentValue - openValue).toFixed(2) + " (" + ((currentValue - openValue) / openValue * 100).toFixed(2) + "%)"; 
+			var changeElm = document.getElementById("change");
+			changeElm.className = up ? "up" : "down";
+			
+			$scope.quote  = document.getElementById("quote").textContent = parseFloat(qoute.currentValue).toFixed(2);
+			$scope.change = changeElm.textContent = change;
+			$scope.date   = document.getElementById("date").textContent  = qoute.sampleDate;
+		} // updateUI
+
+		var timer1 = setTimeout(()  => { $scope.getSymbolQuote("VRNS"); }, 0); // Start immediately.	
+		var timer2 = setInterval(() => { $scope.getSymbolQuote("VRNS"); }, (60 * 1000)); // One minute interval.	
+	});
+	
+</script>
+
+
+</body></html>
